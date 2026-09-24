@@ -1,0 +1,15 @@
+{
+  "name": "Two Lifts, One Wall",
+  "short_name": "Lifts & Wall",
+  "description": "Training log for two gym sessions and one bouldering day a week.",
+  "start_url": "./#today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f3ef",
+  "theme_color": "#164b41",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
