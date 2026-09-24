@@ -67,14 +67,20 @@ main { max-width: 640px; margin: 0 auto; padding: 8px 16px 16px; display: grid; 
 
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-top: 10px; }
 .row.small { margin-top: 6px; }
+.row.date-row { flex-wrap: nowrap; align-items: end; }
+.row.date-row label.check { padding-bottom: 11px; }
 .stack { display: grid; gap: 10px; }
-label { display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); flex: 1 1 140px; }
+label { display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); flex: 1 1 140px; min-width: 0; }
 label.check { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; padding-bottom: 10px; font-size: 16px; color: var(--ink); }
-label.check input { width: 20px; height: 20px; }
+label.check input { width: 22px; height: 22px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: var(--accent); }
 input, select, textarea {
   font: inherit; color: var(--ink); background: var(--bg);
   border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; min-height: 44px;
+  min-width: 0; max-width: 100%;
 }
+/* iOS gives date fields a fixed intrinsic width that overflows the layout; let them size like other inputs. */
+input[type="date"] { -webkit-appearance: none; appearance: none; display: block; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .btn {

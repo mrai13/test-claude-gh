@@ -179,7 +179,7 @@ function renderLog() {
       <div class="seg" role="group" aria-label="Session">
         ${['A', 'B'].map((id) => `<button type="button" class="${d.session === id ? 'on' : ''}" data-action="set-session" data-session="${id}">${SESSIONS[id].name}<small>${SESSIONS[id].subtitle}</small></button>`).join('')}
       </div>
-      <div class="row">
+      <div class="row date-row">
         <label>Date <input type="date" data-field="date" value="${d.date}"></label>
         <label class="check"><input type="checkbox" data-field="deload" ${d.deload ? 'checked' : ''}> Deload</label>
       </div>

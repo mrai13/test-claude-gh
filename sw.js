@@ -1,6 +1,6 @@
 // Offline support: cache the app shell, serve it cache-first, refresh in the background.
 // Bump VERSION when shipping changes so phones pick up the new files.
-const VERSION = 'tlow-v2';
+const VERSION = 'tlow-v3';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/plan.js', './js/progression.js', './js/store.js', './js/chart.js',
