@@ -44,6 +44,8 @@
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* No double-tap zoom (rapid taps on the +/- steppers); pinch-zoom still works. */
+html, body, button, a, input, select, textarea, label { touch-action: manipulation; }
 body {
   margin: 0;
   background: var(--bg);
