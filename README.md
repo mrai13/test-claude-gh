@@ -7,32 +7,90 @@ A phone web app for the *Two Lifts, One Wall* plan: two gym sessions a week plus
 - **The 9-week arc.** The week counter covers weeks 1–2 (find weights), 3–8 (build) and 9 (deload). In deload week the app uses half the sets at 60 % weight, then the cycle restarts.
 - **Bouldering log.** Record date, duration, hardest send and notes. The app warns you when you're about to lift the day before your climbing day, or without a rest day in between.
 - **Progress.** A chart per exercise shows top-set weight and estimated 1RM, with a history table and edit/delete for past workouts.
-- **Offline and private.** Works without signal once opened. Data is stored only on your phone. Export and import a JSON backup from Settings.
+- **Private, synced, offline.** Sign in with a username and password; each account's data is kept separately on your server and shows up on all your devices. The phone keeps a copy, so logging works without signal and syncs when you're back online. Export and import a JSON backup from Settings.
 
-A workout in progress is saved as you type, so it survives the phone locking or the page reloading.
+A workout in progress is saved as you type, so it survives the phone locking or the page reloading. It stays on that device until you save it.
 
-## Install on your phone
+## How it's hosted
 
-1. Open the GitHub Pages URL (`https://<user>.github.io/test-claude-gh/`).
-2. **iPhone:** in Safari, tap Share, then *Add to Home Screen*. **Android:** in Chrome, open the ⋮ menu and tap *Install app*.
+| Part | Where | What |
+|---|---|---|
+| App (`index.html`, `js/`, `css/`, …) | Cloudflare Pages, `app.<domain>` | Static files, deployed on every push to `main` |
+| API (`server/`) | Your VPS in Docker, `api.<domain>` | Login and data storage (SQLite), reached through a Cloudflare Tunnel |
+
+The app finds the API by swapping `app.` for `api.` in its own address (`js/config.js`). No npm dependencies anywhere: the API uses only Node 24 built-ins.
+
+## Set up
+
+You need a domain on Cloudflare and a VPS with Docker (`curl -fsSL https://get.docker.com | sudo sh`).
+
+**1. API on the VPS**
+
+```sh
+git clone https://github.com/mrai13/test-claude-gh.git && cd test-claude-gh
+cp .env.example .env    # then edit it, see below
+```
+
+In Cloudflare **Zero Trust → Networks → Tunnels**, create a tunnel (type *Cloudflared*). Copy the token from the install command into `TUNNEL_TOKEN` in `.env`. Add a **public hostname**: `api.<domain>` → service `HTTP`, URL `api:3000`. Set `APP_ORIGIN=https://app.<domain>` in `.env`.
+
+```sh
+docker compose up -d --build
+docker compose exec api node server/users.js add <your-name>   # asks for a password
+```
+
+No ports need to be open on the VPS: the tunnel connects out to Cloudflare.
+
+**2. App on Cloudflare Pages**
+
+**Workers & Pages → Create → Pages → Connect to Git**, pick this repo, then:
+
+- Build command: `mkdir _site && cp -r index.html manifest.webmanifest sw.js css js icons _site/`
+- Build output directory: `_site`
+
+After the first deploy, add the custom domain `app.<domain>` under the project's **Custom domains**.
+
+**3. Move your data over**
+
+1. In the old GitHub Pages app: **Settings → Export backup**.
+2. Open `https://app.<domain>`, sign in, then **Settings → Import backup**.
+3. Turn off GitHub Pages: repo **Settings → Pages → Source: None**.
+
+**4. Install on your phone**
+
+Open `https://app.<domain>`. **iPhone:** in Safari, tap Share, then *Add to Home Screen*. **Android:** in Chrome, open the ⋮ menu and tap *Install app*.
+
+## Running the server
+
+```sh
+docker compose exec api node server/users.js add <name>      # new account (no public sign-up)
+docker compose exec api node server/users.js passwd <name>   # new password, signs them out everywhere
+docker compose exec api node server/users.js remove <name>   # delete account and its data
+docker compose exec api node server/users.js list
+
+git pull && docker compose up -d --build                     # update the API
+```
+
+**Back up** the database now and then (it's one file in the `data` volume):
+
+```sh
+docker compose cp api:/data/tlow.db ./tlow-$(date +%F).db
+```
 
 ## Run locally
 
-No build step and no dependencies. Serve the folder with any static server:
+Two terminals, Node 22.13+:
 
 ```sh
-python3 -m http.server 5173   # or: npm start
+APP_ORIGIN=http://localhost:5173 COOKIE_SECURE=0 DATA_DIR=./data npm start   # API on :3000
+npm run app                                                                 # app on :5173
+DATA_DIR=./data npm run adduser -- <name>
 ```
 
-Tests (Node 20+):
+Tests:
 
 ```sh
 npm test
 ```
-
-## Deploy
-
-`.github/workflows/deploy.yml` runs the tests and publishes the site to GitHub Pages on every push to `main`. It needs a one-time setup: go to **Settings → Pages → Source** and choose **GitHub Actions**.
 
 When you change app files, bump `VERSION` in `sw.js` so installed copies pick up the update.
 
@@ -42,7 +100,10 @@ When you change app files, bump `VERSION` in `sw.js` so installed copies pick up
 |---|---|
 | `js/plan.js` | The plan as data: exercises, sets, rep ranges, rest, increments |
 | `js/progression.js` | Double-progression rules, cycle weeks, e1RM, schedule warnings (pure, tested) |
-| `js/store.js` | localStorage persistence, export/import |
+| `js/store.js` | Per-account data: offline copy, sync with the API, export/import |
+| `js/sync.js` | Merging two devices' data (pure, tested) |
+| `js/config.js` | Where the API is |
+| `server/` | The API: `app.js` routes, `auth.js` passwords and sessions, `db.js` SQLite, `users.js` account CLI |
 | `js/app.js` | Screens and interactions |
 | `js/chart.js` | SVG progress chart |
 | `sw.js`, `manifest.webmanifest` | Offline support and installability |

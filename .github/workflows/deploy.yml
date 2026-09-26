@@ -1,4 +1,7 @@
-name: Test and deploy to GitHub Pages
+name: Test
+
+# The app is deployed by Cloudflare Pages (connected to this repo) and the API by
+# `docker compose up -d --build` on the VPS; this workflow only runs the tests.
 
 on:
   push:
@@ -8,12 +11,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   test:
@@ -22,23 +19,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
       - run: npm test
-
-  deploy:
-    if: github.event_name != 'pull_request'
-    needs: test
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Collect site files
-        run: |
-          mkdir _site
-          cp -r index.html manifest.webmanifest sw.js css js icons _site/
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-      - id: deployment
-        uses: actions/deploy-pages@v4

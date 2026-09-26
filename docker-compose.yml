@@ -1,0 +1,23 @@
+# API + Cloudflare Tunnel. No ports are opened on the VPS: cloudflared connects out to
+# Cloudflare, and the tunnel's public hostname (api.<domain>) points at http://api:3000.
+# Settings come from .env (copy .env.example).
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN in .env}
+    volumes:
+      - data:/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    depends_on:
+      - api
+
+volumes:
+  data:
