@@ -22,23 +22,23 @@ Pick any `<name>`, e.g. `lifts.example.com` and `lifts-api.example.com`: the app
 
 ## Set up
 
-You need a domain on Cloudflare and a VPS with Docker (`curl -fsSL https://get.docker.com | sudo sh`).
+You need a domain on Cloudflare and a server with Docker. Rootless Docker under a normal user works.
 
-**1. API on the VPS**
+**1. API on the server**
 
-```sh
-git clone https://github.com/mrai13/test-claude-gh.git && cd test-claude-gh
-cp .env.example .env    # then edit it, see below
-```
+Assumes a Cloudflare Tunnel already runs on this server on a Docker network named `tlow`, with a **public hostname** `<name>-api.<domain>` → service `HTTP`, URL `api:3000`. No ports need to be open: the tunnel connects out to Cloudflare.
 
-In Cloudflare **Zero Trust → Networks → Tunnels**, create a tunnel (type *Cloudflared*). Copy the token from the install command into `TUNNEL_TOKEN` in `.env`. Add a **public hostname**: `<name>-api.<domain>` → service `HTTP`, URL `api:3000`. Set `APP_ORIGIN=https://<name>.<domain>` in `.env`.
+Create `~/tlow/.env` from `.env.example` with `APP_ORIGIN=https://<name>.<domain>`, then:
 
 ```sh
-docker compose up -d --build
-docker compose exec api node server/users.js add <your-name>   # asks for a password
+git clone https://github.com/mrai13/test-claude-gh.git ~/tlow-src
+cd ~/tlow-src && docker build -t tlow-api .
+docker run -d --name api --restart unless-stopped --network tlow \
+  --env-file ~/tlow/.env -v tlow-data:/data tlow-api
+docker exec -it api node server/users.js add <your-name>   # asks for a password
 ```
 
-No ports need to be open on the VPS: the tunnel connects out to Cloudflare.
+`https://<name>-api.<domain>/api/health` should answer `{"ok":true}`.
 
 **2. App on Cloudflare Pages**
 
@@ -62,18 +62,24 @@ Open `https://<name>.<domain>`. **iPhone:** in Safari, tap Share, then *Add to H
 ## Running the server
 
 ```sh
-docker compose exec api node server/users.js add <name>      # new account (no public sign-up)
-docker compose exec api node server/users.js passwd <name>   # new password, signs them out everywhere
-docker compose exec api node server/users.js remove <name>   # delete account and its data
-docker compose exec api node server/users.js list
-
-git pull && docker compose up -d --build                     # update the API
+docker exec -it api node server/users.js add <name>      # new account (no public sign-up)
+docker exec -it api node server/users.js passwd <name>   # new password, signs them out everywhere
+docker exec api node server/users.js remove <name>       # delete account and its data
+docker exec api node server/users.js list
 ```
 
-**Back up** the database now and then (it's one file in the `data` volume):
+**Update** the API (your data stays in the `tlow-data` volume):
 
 ```sh
-docker compose cp api:/data/tlow.db ./tlow-$(date +%F).db
+cd ~/tlow-src && git pull && docker build -t tlow-api . && docker rm -f api
+docker run -d --name api --restart unless-stopped --network tlow \
+  --env-file ~/tlow/.env -v tlow-data:/data tlow-api
+```
+
+**Back up** the database now and then (it's one file in the `tlow-data` volume):
+
+```sh
+docker cp api:/data/tlow.db ~/tlow-$(date +%F).db
 ```
 
 ## Run locally

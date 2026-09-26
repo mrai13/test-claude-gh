@@ -1,23 +1,21 @@
-# API + Cloudflare Tunnel. No ports are opened on the VPS: cloudflared connects out to
-# Cloudflare, and the tunnel's public hostname (<name>-api.<domain>) points at http://api:3000.
+# The API only. The Cloudflare Tunnel runs separately on the `tlow` Docker network,
+# and its public hostname (<name>-api.<domain>) points at http://api:3000.
 # Settings come from .env (copy .env.example).
 services:
   api:
     build: .
+    container_name: api
     restart: unless-stopped
-    environment:
-      APP_ORIGIN: ${APP_ORIGIN:?set APP_ORIGIN in .env}
+    env_file: .env
     volumes:
-      - data:/data
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
-    depends_on:
-      - api
+      - tlow-data:/data
+    networks:
+      - tlow
 
 volumes:
-  data:
+  tlow-data:
+    name: tlow-data
+
+networks:
+  tlow:
+    external: true
