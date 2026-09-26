@@ -232,7 +232,7 @@ function saveWorkout() {
     .filter((e) => e.sets.length);
   if (!entries.length) { toast('Enter reps for at least one set first.'); return; }
   store.update((s) => {
-    const w = { id: d.editingId || store.uid(), date: d.date, session: d.session, deload: d.deload, notes: d.notes.trim(), entries };
+    const w = { id: d.editingId || store.uid(), date: d.date, session: d.session, deload: d.deload, notes: d.notes.trim(), entries, updatedAt: Date.now() };
     const i = s.workouts.findIndex((x) => x.id === w.id);
     if (i >= 0) s.workouts[i] = { ...s.workouts[i], ...w };
     else s.workouts.push({ ...w, createdAt: Date.now() });
@@ -273,7 +273,7 @@ function renderBoulder() {
     e.preventDefault();
     const f = new FormData(e.target);
     store.update((st) => st.boulders.push({
-      id: store.uid(), createdAt: Date.now(), date: f.get('date') || today(),
+      id: store.uid(), createdAt: Date.now(), updatedAt: Date.now(), date: f.get('date') || today(),
       durationMin: String(f.get('durationMin') || '').trim(), hardestGrade: String(f.get('hardestGrade') || '').trim(), notes: String(f.get('notes') || '').trim(),
     }));
     toast('Climb logged 🧗');
@@ -367,8 +367,14 @@ function renderSettings() {
       <p class="muted small">Used to warn you when you’re about to lift the day before you climb.</p>
     </section>
     <section class="card stack">
+      <div class="eyebrow">Account</div>
+      <p>Signed in as <strong>${esc(store.username())}</strong></p>
+      <p class="muted small" id="sync-status">${esc(syncText())}</p>
+      <div class="row"><button class="btn ghost" data-action="logout">Log out</button></div>
+    </section>
+    <section class="card stack">
       <div class="eyebrow">Your data</div>
-      <p class="muted small">Everything stays on this device. Export a backup now and then, and before you switch phones.</p>
+      <p class="muted small">Saved to your account, so it shows up on all your devices. This device keeps a copy, so logging works offline. Export a backup now and then.</p>
       <div class="row">
         <button class="btn" data-action="export">Export backup</button>
         <label class="btn ghost">Import backup<input type="file" id="import-file" accept="application/json,.json" hidden></label>
@@ -398,7 +404,7 @@ function renderSettings() {
     if (!file) return;
     try {
       const text = await file.text();
-      if (!confirm('Replace all data on this device with the backup?')) return;
+      if (!confirm('Replace all your data with the backup? This also replaces it on your other devices.')) return;
       store.importJSON(text);
       toast('Backup imported');
       renderSettings();
@@ -470,17 +476,18 @@ app.addEventListener('click', (e) => {
     case 'edit-workout': editWorkout(btn.dataset.id); break;
     case 'delete-workout':
       if (!confirm('Delete this workout?')) return;
-      store.update((st) => { st.workouts = st.workouts.filter((w) => w.id !== btn.dataset.id); });
+      store.update((st) => { st.workouts = st.workouts.filter((w) => w.id !== btn.dataset.id); st.deleted[btn.dataset.id] = Date.now(); });
       renderProgress();
       break;
     case 'delete-boulder':
       if (!confirm('Delete this climbing session?')) return;
-      store.update((st) => { st.boulders = st.boulders.filter((b) => b.id !== btn.dataset.id); });
+      store.update((st) => { st.boulders = st.boulders.filter((b) => b.id !== btn.dataset.id); st.deleted[btn.dataset.id] = Date.now(); });
       renderBoulder();
       break;
     case 'export': exportBackup(); break;
+    case 'logout': logout(); break;
     case 'clear':
-      if (!confirm('Delete ALL workouts, climbs and settings on this device? This cannot be undone.')) return;
+      if (!confirm('Delete ALL workouts, climbs and settings from your account, on every device? This cannot be undone.')) return;
       store.clearAll();
       toast('All data deleted');
       renderSettings();
@@ -507,8 +514,83 @@ app.addEventListener('change', (e) => {
   }
 });
 
-window.addEventListener('hashchange', route);
-route();
+// ---------- account and sync ----------
+
+function syncText() {
+  const { status, detail, pending } = store.syncStatus();
+  switch (status) {
+    case 'syncing': return 'Syncing…';
+    case 'offline': return pending ? 'Offline. Changes are saved on this device and will sync when you’re back online.' : 'Offline.';
+    case 'error': return `Sync problem: ${detail}. Will retry.`;
+    case 'synced': return 'All changes saved to your account.';
+    default: return pending ? 'Waiting to sync…' : '';
+  }
+}
+
+store.onStatus((status) => {
+  const el = document.getElementById('sync-status');
+  if (el) el.textContent = syncText();
+  if (status === 'signed-out' && started) showLogin('Your session has ended. Please sign in again.');
+});
+
+// Data from another device arrived: redraw, unless the user is typing into a field.
+store.onRemoteChange(() => {
+  if (!started || document.body.classList.contains('signed-out')) return;
+  if (app.contains(document.activeElement) && document.activeElement.matches('input, textarea, select')) return;
+  const y = window.scrollY;
+  route();
+  window.scrollTo(0, y);
+});
+
+async function logout() {
+  await store.sync();
+  if (store.syncStatus().pending
+    && !confirm('Some changes haven’t reached the server yet and will be lost if you log out now. Log out anyway?')) return;
+  await store.logout();
+  showLogin();
+}
+
+function showLogin(message = '') {
+  document.body.classList.add('signed-out');
+  app.innerHTML = `
+    <section class="card">
+      <div class="eyebrow">Sign in</div>
+      <form id="login-form" class="stack">
+        <label>Username <input name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></label>
+        <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+        <p class="muted small" id="login-msg" role="alert">${esc(message)}</p>
+        <button class="btn">Sign in</button>
+      </form>
+      <p class="muted small">No sign-up here: ask whoever runs the server for an account.</p>
+    </section>`;
+  const form = document.getElementById('login-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(form);
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    try {
+      await store.login(String(f.get('username')), String(f.get('password')));
+      start();
+    } catch (err) {
+      document.getElementById('login-msg').textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+let started = false;
+
+function start() {
+  document.body.classList.remove('signed-out');
+  if (!started) window.addEventListener('hashchange', () => { if (!document.body.classList.contains('signed-out')) route(); });
+  started = true;
+  route();
+}
+
+store.init()
+  .then((user) => (user ? start() : showLogin()))
+  .catch(() => showLogin('Can’t reach the server. Check your connection and reload.'));
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});

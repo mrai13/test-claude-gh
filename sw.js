@@ -1,9 +1,11 @@
 // Offline support: cache the app shell, serve it cache-first, refresh in the background.
 // Bump VERSION when shipping changes so phones pick up the new files.
-const VERSION = 'tlow-v3';
+// The API is on another origin, so the fetch handler below never caches it.
+const VERSION = 'tlow-v4';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/app.js', './js/plan.js', './js/progression.js', './js/store.js', './js/chart.js',
+  './js/config.js', './js/sync.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
 ];
 
