@@ -15,30 +15,30 @@ A workout in progress is saved as you type, so it survives the phone locking or 
 
 | Part | Where | What |
 |---|---|---|
-| App (`index.html`, `js/`, `css/`, …) | Cloudflare Pages, `app.<domain>` | Static files, deployed on every push to `main` |
-| API (`server/`) | Your VPS in Docker, `api.<domain>` | Login and data storage (SQLite), reached through a Cloudflare Tunnel |
+| App (`index.html`, `js/`, `css/`, …) | Cloudflare Pages, `<name>.<domain>` | Static files, deployed on every push to `main` |
+| API (`server/`) | Your VPS in Docker, `<name>-api.<domain>` | Login and data storage (SQLite), reached through a Cloudflare Tunnel |
 
-The app finds the API by swapping `app.` for `api.` in its own address (`js/config.js`). No npm dependencies anywhere: the API uses only Node 24 built-ins.
+Pick any `<name>`, e.g. `lifts.example.com` and `lifts-api.example.com`: the app finds the API by adding `-api` to the first part of its own address (`js/config.js`). Keep both one level below your domain, which Cloudflare's free certificate covers. No npm dependencies anywhere: the API uses only Node 24 built-ins.
 
 ## Set up
 
-You need a domain on Cloudflare and a VPS with Docker (`curl -fsSL https://get.docker.com | sudo sh`).
+You need a domain on Cloudflare and a server with Docker. Rootless Docker under a normal user works.
 
-**1. API on the VPS**
+**1. API on the server**
 
-```sh
-git clone https://github.com/mrai13/test-claude-gh.git && cd test-claude-gh
-cp .env.example .env    # then edit it, see below
-```
+Assumes a Cloudflare Tunnel already runs on this server on a Docker network named `tlow`, with a **public hostname** `<name>-api.<domain>` → service `HTTP`, URL `api:3000`. No ports need to be open: the tunnel connects out to Cloudflare.
 
-In Cloudflare **Zero Trust → Networks → Tunnels**, create a tunnel (type *Cloudflared*). Copy the token from the install command into `TUNNEL_TOKEN` in `.env`. Add a **public hostname**: `api.<domain>` → service `HTTP`, URL `api:3000`. Set `APP_ORIGIN=https://app.<domain>` in `.env`.
+Create `~/tlow/.env` from `.env.example` with `APP_ORIGIN=https://<name>.<domain>`, then:
 
 ```sh
-docker compose up -d --build
-docker compose exec api node server/users.js add <your-name>   # asks for a password
+git clone https://github.com/mrai13/test-claude-gh.git ~/tlow-src
+cd ~/tlow-src && docker build -t tlow-api .
+docker run -d --name api --restart unless-stopped --network tlow \
+  --env-file ~/tlow/.env -v tlow-data:/data tlow-api
+docker exec -it api node server/users.js add <your-name>   # asks for a password
 ```
 
-No ports need to be open on the VPS: the tunnel connects out to Cloudflare.
+`https://<name>-api.<domain>/api/health` should answer `{"ok":true}`.
 
 **2. App on Cloudflare Pages**
 
@@ -47,33 +47,39 @@ No ports need to be open on the VPS: the tunnel connects out to Cloudflare.
 - Build command: `mkdir _site && cp -r index.html manifest.webmanifest sw.js css js icons _site/`
 - Build output directory: `_site`
 
-After the first deploy, add the custom domain `app.<domain>` under the project's **Custom domains**.
+After the first deploy, add the custom domain `<name>.<domain>` under the project's **Custom domains**.
 
 **3. Move your data over**
 
 1. In the old GitHub Pages app: **Settings → Export backup**.
-2. Open `https://app.<domain>`, sign in, then **Settings → Import backup**.
+2. Open `https://<name>.<domain>`, sign in, then **Settings → Import backup**.
 3. Turn off GitHub Pages: repo **Settings → Pages → Source: None**.
 
 **4. Install on your phone**
 
-Open `https://app.<domain>`. **iPhone:** in Safari, tap Share, then *Add to Home Screen*. **Android:** in Chrome, open the ⋮ menu and tap *Install app*.
+Open `https://<name>.<domain>`. **iPhone:** in Safari, tap Share, then *Add to Home Screen*. **Android:** in Chrome, open the ⋮ menu and tap *Install app*.
 
 ## Running the server
 
 ```sh
-docker compose exec api node server/users.js add <name>      # new account (no public sign-up)
-docker compose exec api node server/users.js passwd <name>   # new password, signs them out everywhere
-docker compose exec api node server/users.js remove <name>   # delete account and its data
-docker compose exec api node server/users.js list
-
-git pull && docker compose up -d --build                     # update the API
+docker exec -it api node server/users.js add <name>      # new account (no public sign-up)
+docker exec -it api node server/users.js passwd <name>   # new password, signs them out everywhere
+docker exec api node server/users.js remove <name>       # delete account and its data
+docker exec api node server/users.js list
 ```
 
-**Back up** the database now and then (it's one file in the `data` volume):
+**Update** the API (your data stays in the `tlow-data` volume):
 
 ```sh
-docker compose cp api:/data/tlow.db ./tlow-$(date +%F).db
+cd ~/tlow-src && git pull && docker build -t tlow-api . && docker rm -f api
+docker run -d --name api --restart unless-stopped --network tlow \
+  --env-file ~/tlow/.env -v tlow-data:/data tlow-api
+```
+
+**Back up** the database now and then (it's one file in the `tlow-data` volume):
+
+```sh
+docker cp api:/data/tlow.db ~/tlow-$(date +%F).db
 ```
 
 ## Run locally
