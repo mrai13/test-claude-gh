@@ -15,10 +15,10 @@ A workout in progress is saved as you type, so it survives the phone locking or 
 
 | Part | Where | What |
 |---|---|---|
-| App (`index.html`, `js/`, `css/`, …) | Cloudflare Pages, `app.<domain>` | Static files, deployed on every push to `main` |
-| API (`server/`) | Your VPS in Docker, `api.<domain>` | Login and data storage (SQLite), reached through a Cloudflare Tunnel |
+| App (`index.html`, `js/`, `css/`, …) | Cloudflare Pages, `<name>.<domain>` | Static files, deployed on every push to `main` |
+| API (`server/`) | Your VPS in Docker, `<name>-api.<domain>` | Login and data storage (SQLite), reached through a Cloudflare Tunnel |
 
-The app finds the API by swapping `app.` for `api.` in its own address (`js/config.js`). No npm dependencies anywhere: the API uses only Node 24 built-ins.
+Pick any `<name>`, e.g. `lifts.example.com` and `lifts-api.example.com`: the app finds the API by adding `-api` to the first part of its own address (`js/config.js`). Keep both one level below your domain, which Cloudflare's free certificate covers. No npm dependencies anywhere: the API uses only Node 24 built-ins.
 
 ## Set up
 
@@ -31,7 +31,7 @@ git clone https://github.com/mrai13/test-claude-gh.git && cd test-claude-gh
 cp .env.example .env    # then edit it, see below
 ```
 
-In Cloudflare **Zero Trust → Networks → Tunnels**, create a tunnel (type *Cloudflared*). Copy the token from the install command into `TUNNEL_TOKEN` in `.env`. Add a **public hostname**: `api.<domain>` → service `HTTP`, URL `api:3000`. Set `APP_ORIGIN=https://app.<domain>` in `.env`.
+In Cloudflare **Zero Trust → Networks → Tunnels**, create a tunnel (type *Cloudflared*). Copy the token from the install command into `TUNNEL_TOKEN` in `.env`. Add a **public hostname**: `<name>-api.<domain>` → service `HTTP`, URL `api:3000`. Set `APP_ORIGIN=https://<name>.<domain>` in `.env`.
 
 ```sh
 docker compose up -d --build
@@ -47,17 +47,17 @@ No ports need to be open on the VPS: the tunnel connects out to Cloudflare.
 - Build command: `mkdir _site && cp -r index.html manifest.webmanifest sw.js css js icons _site/`
 - Build output directory: `_site`
 
-After the first deploy, add the custom domain `app.<domain>` under the project's **Custom domains**.
+After the first deploy, add the custom domain `<name>.<domain>` under the project's **Custom domains**.
 
 **3. Move your data over**
 
 1. In the old GitHub Pages app: **Settings → Export backup**.
-2. Open `https://app.<domain>`, sign in, then **Settings → Import backup**.
+2. Open `https://<name>.<domain>`, sign in, then **Settings → Import backup**.
 3. Turn off GitHub Pages: repo **Settings → Pages → Source: None**.
 
 **4. Install on your phone**
 
-Open `https://app.<domain>`. **iPhone:** in Safari, tap Share, then *Add to Home Screen*. **Android:** in Chrome, open the ⋮ menu and tap *Install app*.
+Open `https://<name>.<domain>`. **iPhone:** in Safari, tap Share, then *Add to Home Screen*. **Android:** in Chrome, open the ⋮ menu and tap *Install app*.
 
 ## Running the server
 
